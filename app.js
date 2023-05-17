@@ -29,7 +29,8 @@ mongoose.connect("mongodb://127.0.0.1:27017/userDB",{useNewUrlParser: true});
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId:String
+    googleId:String,
+    secret:String
 }); 
 //passportLocalMongoose, used to hash and salt users passwords as well as to save them 
 userSchema.plugin(passportLocalMongoose);
@@ -63,7 +64,7 @@ passport.use(new GoogleStrategy({
   },
   //callback function
   function(accessToken, refreshToken, profile, cb) {
-    console.log(profile);
+    //console.log(profile);
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
     });
@@ -98,13 +99,55 @@ app.get("/login", (req, res) => {
 
 
 app.get("/secrets", function (req, res){
+    User.find({"secret": { $ne: null }})
+    .then(function(foundUsers) {
+      console.log(foundUsers);
+      res.render("secrets", { usersWithSecrets: foundUsers });
+    })
+    .catch(function(err) {
+      console.log(err);
+    });
+ 
+});
+
+app.get("/submit", function(req, res){
+ //check to see if use is authenticated
  if(req.isAuthenticated()){
-    //through thte use of session, we are able allow to the use to see the restricted areas of the app.
-    res.render("secrets");
+    res.render("submit");
  }else{
+    //if not authenticated
     res.redirect("/login");
  }
 });
+
+app.post("/submit", function(req,res){
+//let the user post a secret
+const userSecret = req.body.secret;
+User.findById(req.user.id)
+  .then(function (foundUser) {
+    if (foundUser) {
+      // If a user is found, update the secret field
+      foundUser.secret = userSecret;
+      return foundUser.save();
+    }
+  })
+  .then(function () {
+    res.redirect("/secrets");
+  })
+  .catch(function (err) {
+    console.log(err);
+  });
+
+
+});
+
+app.get('/logout', function(req, res, next){
+    //logout the user from our app
+    req.logout(function(err) {
+      if (err) { return next(err); }
+      res.redirect('/login');
+    });
+  });
 
 app.post("/register",  function(req, res){
  User.register({username:req.body.username}, req.body.password, function(err, user){
